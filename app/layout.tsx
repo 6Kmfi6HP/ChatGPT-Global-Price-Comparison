@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://chatgpt-global-price-comparison.pages.dev'),
   title: "ChatGPT Global Price Comparison | Compare Subscription Costs Worldwide",
   description:
     "Compare ChatGPT subscription prices across different countries and currencies. Find the best pricing for ChatGPT Plus and ChatGPT-4o mini subscriptions worldwide.",

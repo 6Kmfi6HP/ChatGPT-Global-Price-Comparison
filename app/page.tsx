@@ -4,6 +4,86 @@ import { useEffect, useState } from "react";
 import { Globe2, DollarSign, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Map country names to their ISO codes for flag emojis
+const countryToCode: Record<string, string> = {
+  Afghanistan: "AF",
+  Algeria: "DZ",
+  America: "US",
+  Angola: "AO",
+  Argentina: "AR",
+  Australia: "AU",
+  Austria: "AT",
+  Azerbaijan: "AZ",
+  Belgium: "BE",
+  Bolivia: "BO",
+  Brazil: "BR",
+  Cambodia: "KH",
+  Canada: "CA",
+  Chile: "CL",
+  Cyprus: "CY",
+  "Czech Republic": "CZ",
+  Danmark: "DK",
+  Egypt: "EG",
+  England: "GB",
+  Finland: "FI",
+  French: "FR",
+  Germany: "DE",
+  Ghana: "GH",
+  Greece: "GR",
+  Hungary: "HU",
+  India: "IN",
+  Indonesia: "ID",
+  Iraq: "IQ",
+  Ireland: "IE",
+  Israel: "IL",
+  Italy: "IT",
+  Japan: "JP",
+  Kazakhstan: "KZ",
+  Kenya: "KE",
+  Korea: "KR",
+  Lebanon: "LB",
+  Libya: "LY",
+  Malaysia: "MY",
+  Mexico: "MX",
+  Myanmar: "MM",
+  Netherlands: "NL",
+  "New Zealand": "NZ",
+  Nicuador: "EC",
+  Nigeria: "NG",
+  Norway: "NO",
+  Pakistan: "PK",
+  Panama: "PA",
+  "the Philippines": "PH",
+  Philippines: "PH",
+  Poland: "PL",
+  Portugal: "PT",
+  Qatar: "QA",
+  Romania: "RO",
+  "Saudi Arabia": "SA",
+  Singapore: "SG",
+  "South Africa": "ZA",
+  Spain: "ES",
+  Sweden: "SE",
+  Switzerland: "CH",
+  Taiwan: "TW",
+  Thailand: "TH",
+  Turkey: "TR",
+  Ukraine: "UA",
+  "United Arab Emirates": "AE",
+  "United States": "US",
+  Vietnam: "VN",
+};
+
+function getCountryFlag(country: string): string {
+  const code = countryToCode[country];
+  if (!code) return "🌐";
+  // Convert country code to regional indicator symbols
+  return code
+    .split("")
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join("");
+}
+
 interface Price {
   plan_name: string;
   price: number;
@@ -34,52 +114,73 @@ export default function Home() {
   const [availableCurrencies, setAvailableCurrencies] = useState<string[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      fetch("https://familypro.io/api/triple/price-list/ChatGPT"),
-      fetch("https://api.exchangerate-api.com/v4/latest/USD")
-    ])
-      .then(([priceRes, ratesRes]) => Promise.all([priceRes.json(), ratesRes.json()]))
-      .then(([priceData, ratesData]) => {
+    const fetchData = async () => {
+      try {
+        const [priceRes, ratesRes] = await Promise.all([
+          fetch("https://familypro.io/api/triple/price-list/ChatGPT"),
+          fetch("https://api.exchangerate-api.com/v4/latest/USD"),
+        ]);
+
+        const [priceData, ratesData] = await Promise.all([
+          priceRes.json(),
+          ratesRes.json(),
+        ]);
+
         setPriceData(priceData.data);
         setExchangeRates(ratesData.rates);
-        const currencies = Object.values<CountryData>(priceData.data.country_config).map(
-          (country: CountryData) => country.currency
-        );
-        setAvailableCurrencies([...Array.from(new Set(currencies))]);
-        setLoading(false);
-      })
-      .catch((error) => {
+
+        // Use currencies from exchange rate API
+        const availableCurrencies = Object.keys(ratesData.rates);
+        setAvailableCurrencies(availableCurrencies);
+      } catch (error) {
         console.error("Error fetching data:", error);
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    fetchData();
   }, []);
 
-  const convertPrice = (price: number, fromCurrency: string, toCurrency: string) => {
-    if (!exchangeRates[fromCurrency] || !exchangeRates[toCurrency]) return price;
+  const convertPrice = (
+    price: number,
+    fromCurrency: string,
+    toCurrency: string
+  ) => {
+    if (!exchangeRates[fromCurrency] || !exchangeRates[toCurrency])
+      return price;
     const inUSD = price / exchangeRates[fromCurrency];
     return (inUSD * exchangeRates[toCurrency]).toFixed(2);
   };
 
   const sortedCountries = priceData?.country_list.sort((a, b) => {
-    const priceA = priceData.country_config[a].price_list.find(
-      (p) => p.plan_name === "ChatGPT Plus"
-    )?.price || 0;
-    const priceB = priceData.country_config[b].price_list.find(
-      (p) => p.plan_name === "ChatGPT Plus"
-    )?.price || 0;
-    
-    const convertedPriceA = Number(convertPrice(
-      priceA,
-      priceData.country_config[a].currency,
-      selectedCurrency
-    ));
-    const convertedPriceB = Number(convertPrice(
-      priceB,
-      priceData.country_config[b].currency,
-      selectedCurrency
-    ));
-    
-    return sortOrder === "asc" ? convertedPriceA - convertedPriceB : convertedPriceB - convertedPriceA;
+    const priceA =
+      priceData.country_config[a].price_list.find(
+        (p) => p.plan_name === "ChatGPT Plus"
+      )?.price || 0;
+    const priceB =
+      priceData.country_config[b].price_list.find(
+        (p) => p.plan_name === "ChatGPT Plus"
+      )?.price || 0;
+
+    const convertedPriceA = Number(
+      convertPrice(
+        priceA,
+        priceData.country_config[a].currency,
+        selectedCurrency
+      )
+    );
+    const convertedPriceB = Number(
+      convertPrice(
+        priceB,
+        priceData.country_config[b].currency,
+        selectedCurrency
+      )
+    );
+
+    return sortOrder === "asc"
+      ? convertedPriceA - convertedPriceB
+      : convertedPriceB - convertedPriceA;
   });
 
   return (
@@ -110,14 +211,15 @@ export default function Home() {
               </option>
             ))}
           </select>
-          
+
           <button
             onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
             className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
           >
             <ArrowUpDown className="h-4 w-4" />
             <span>
-              Sort by price ({sortOrder === "asc" ? "Low to High" : "High to Low"})
+              Sort by price (
+              {sortOrder === "asc" ? "Low to High" : "High to Low"})
             </span>
           </button>
         </div>
@@ -151,8 +253,9 @@ export default function Home() {
                   key={country}
                   className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
                 >
-                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                    {country}
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <span className="text-2xl">{getCountryFlag(country)}</span>
+                    <span>{country}</span>
                   </h2>
                   <div className="space-y-3">
                     {plusPrice && (
@@ -166,7 +269,8 @@ export default function Home() {
                         </div>
                         {countryData?.currency !== selectedCurrency && (
                           <div className="flex items-center justify-end text-sm text-gray-500">
-                            ≈ {selectedCurrency} {convertPrice(
+                            ≈ {selectedCurrency}{" "}
+                            {convertPrice(
                               plusPrice.price,
                               countryData?.currency ?? "USD",
                               selectedCurrency
@@ -186,7 +290,8 @@ export default function Home() {
                         </div>
                         {countryData?.currency !== selectedCurrency && (
                           <div className="flex items-center justify-end text-sm text-gray-500">
-                            ≈ {selectedCurrency} {convertPrice(
+                            ≈ {selectedCurrency}{" "}
+                            {convertPrice(
                               miniPrice.price,
                               countryData?.currency ?? "USD",
                               selectedCurrency

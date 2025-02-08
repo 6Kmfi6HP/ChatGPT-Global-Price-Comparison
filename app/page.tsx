@@ -53,7 +53,6 @@ const countryToCode: Record<string, string> = {
   Norway: "NO",
   Pakistan: "PK",
   Panama: "PA",
-  "the Philippines": "PH",
   Philippines: "PH",
   Poland: "PL",
   Portugal: "PT",
@@ -84,7 +83,7 @@ function getCountryFlag(country: string): string {
     .join("");
 }
 
-interface Price {
+interface PriceListItem {
   plan_name: string;
   price: number;
 }
@@ -92,7 +91,9 @@ interface Price {
 interface CountryData {
   currency: string;
   symbol: string;
-  price_list: Price[];
+  price_list: PriceListItem[];
+  interval_type: string;
+  share_type: string;
 }
 
 interface PriceData {
@@ -126,7 +127,48 @@ export default function Home() {
           ratesRes.json(),
         ]);
 
-        setPriceData(priceData.data);
+        // 处理API返回的数据
+        const processedData = { ...priceData.data };
+        
+        // 1. 将"the Philippines"改为"Philippines"
+        if (processedData.country_config["the Philippines"]) {
+          processedData.country_config["Philippines"] = {
+            ...processedData.country_config["the Philippines"],
+            currency: "PHP" // 2. 修正货币代码
+          };
+          delete processedData.country_config["the Philippines"];
+          processedData.country_list = processedData.country_list.map((country: string) => 
+            country === "the Philippines" ? "Philippines" : country
+          );
+        }
+
+        // 3. 修正越南价格
+        if (processedData.country_config["Vietnam"]) {
+          processedData.country_config["Vietnam"].price_list = 
+            processedData.country_config["Vietnam"].price_list.map((item: PriceListItem) => ({
+              ...item,
+              price: item.plan_name === "ChatGPT Plus" ? item.price * 1000 : item.price
+            }));
+        }
+
+        // 4. 替换ChatGPT-4o mini为ChatGPT Pro并设置价格为Plus的10倍
+        Object.keys(processedData.country_config).forEach((country: string) => {
+          const countryData = processedData.country_config[country];
+          const plusPrice = countryData.price_list.find((p: PriceListItem) => p.plan_name === "ChatGPT Plus")?.price || 0;
+          
+          countryData.price_list = countryData.price_list.map((item: PriceListItem) => {
+            if (item.plan_name === "ChatGPT-4o mini") {
+              return {
+                ...item,
+                plan_name: "ChatGPT Pro",
+                price: Number((plusPrice * 10).toFixed(2))
+              };
+            }
+            return item;
+          });
+        });
+
+        setPriceData(processedData);
         setExchangeRates(ratesData.rates);
 
         // Use currencies from exchange rate API
@@ -148,7 +190,7 @@ export default function Home() {
     toCurrency: string
   ) => {
     if (!exchangeRates[fromCurrency] || !exchangeRates[toCurrency])
-      return price;
+      return price.toFixed(2);
     const inUSD = price / exchangeRates[fromCurrency];
     return (inUSD * exchangeRates[toCurrency]).toFixed(2);
   };
@@ -244,8 +286,8 @@ export default function Home() {
               const plusPrice = countryData?.price_list.find(
                 (p) => p.plan_name === "ChatGPT Plus"
               );
-              const miniPrice = countryData?.price_list.find(
-                (p) => p.plan_name === "ChatGPT-4o mini"
+              const proPrice = countryData?.price_list.find(
+                (p) => p.plan_name === "ChatGPT Pro"
               );
 
               return (
@@ -264,7 +306,7 @@ export default function Home() {
                           <span className="text-gray-600">ChatGPT Plus</span>
                           <span className="text-lg font-medium text-gray-900">
                             {countryData?.symbol}
-                            {plusPrice.price}
+                            {plusPrice.price.toFixed(2)}
                           </span>
                         </div>
                         {countryData?.currency !== selectedCurrency && (
@@ -279,20 +321,20 @@ export default function Home() {
                         )}
                       </div>
                     )}
-                    {miniPrice && (
+                    {proPrice && (
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-600">ChatGPT-4o mini</span>
+                          <span className="text-gray-600">ChatGPT Pro</span>
                           <span className="text-lg font-medium text-gray-900">
                             {countryData?.symbol}
-                            {miniPrice.price}
+                            {proPrice.price.toFixed(2)}
                           </span>
                         </div>
                         {countryData?.currency !== selectedCurrency && (
                           <div className="flex items-center justify-end text-sm text-gray-500">
                             ≈ {selectedCurrency}{" "}
                             {convertPrice(
-                              miniPrice.price,
+                              proPrice.price,
                               countryData?.currency ?? "USD",
                               selectedCurrency
                             )}

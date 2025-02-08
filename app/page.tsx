@@ -42,10 +42,10 @@ export default function Home() {
       .then(([priceData, ratesData]) => {
         setPriceData(priceData.data);
         setExchangeRates(ratesData.rates);
-        const currencies = Object.values(priceData.data.country_config).map(
+        const currencies = Object.values<CountryData>(priceData.data.country_config).map(
           (country: CountryData) => country.currency
         );
-        setAvailableCurrencies([...new Set(currencies)]);
+        setAvailableCurrencies([...Array.from(new Set(currencies))]);
         setLoading(false);
       })
       .catch((error) => {
@@ -168,7 +168,7 @@ export default function Home() {
                           <div className="flex items-center justify-end text-sm text-gray-500">
                             ≈ {selectedCurrency} {convertPrice(
                               plusPrice.price,
-                              countryData?.currency,
+                              countryData?.currency ?? "USD",
                               selectedCurrency
                             )}
                           </div>
@@ -188,7 +188,7 @@ export default function Home() {
                           <div className="flex items-center justify-end text-sm text-gray-500">
                             ≈ {selectedCurrency} {convertPrice(
                               miniPrice.price,
-                              countryData?.currency,
+                              countryData?.currency ?? "USD",
                               selectedCurrency
                             )}
                           </div>
